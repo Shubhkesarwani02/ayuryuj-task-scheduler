@@ -1,0 +1,71 @@
+# Binaries and executables
+*.exe
+*.exe~
+*.test
+main
+task-scheduler
+server
+
+# Development files
+.env
+.env.local
+.env.development
+.env.test
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Node.js (if you have frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+
+# Testing
+coverage.html
+coverage.out
+*.cover
+
+# Temporary files
+tmp/
+temp/
+
+# Documentation build artifacts (keep source docs)
+docs/build/
+
+# Git
+.git/
+.gitignore
+
+# Ignore test files in Docker
+tests/
+
+# Other
+README.md
+LICENSE
+DELIVERABLES_SUMMARY.md
+CODEBASE_STATUS.md
+TODO_TESTING.md

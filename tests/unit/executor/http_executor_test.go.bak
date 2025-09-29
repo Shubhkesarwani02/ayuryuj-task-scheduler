@@ -1,0 +1,425 @@
+package executor
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"task-scheduler/internal/executor"
+	"task-scheduler/internal/models"
+	"task-scheduler/tests/utils"
+)
+
+type HTTPExecutorTestSuite struct {
+	suite.Suite
+	executor   *executor.HTTPExecutor
+	mockServer *utils.MockHTTPServer
+	factory    *utils.TaskFactory
+}
+
+func (suite *HTTPExecutorTestSuite) SetupSuite() {
+	suite.executor = executor.NewHTTPExecutor()
+	suite.factory = utils.NewTaskFactory()
+}
+
+func (suite *HTTPExecutorTestSuite) SetupTest() {
+	// Create a fresh mock server for each test
+	suite.mockServer = utils.NewMockHTTPServer()
+}
+
+func (suite *HTTPExecutorTestSuite) TearDownTest() {
+	if suite.mockServer != nil {
+		suite.mockServer.Close()
+	}
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_SuccessfulPOST() {
+	// Setup mock server response
+	suite.mockServer.SetSuccessResponse("POST", "/webhook", map[string]interface{}{
+		"status":  "received",
+		"message": "webhook processed successfully",
+		"id":      "12345",
+	})
+
+	// Create a POST task
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		suite.mockServer.GetURL()+"/webhook",
+		models.Headers{"Content-Type": "application/json"},
+		map[string]string{"test": "data"},
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.Equal(suite.T(), task.ID, result.TaskID)
+	assert.True(suite.T(), result.Success)
+	assert.NotNil(suite.T(), result.StatusCode)
+	assert.Equal(suite.T(), 200, *result.StatusCode)
+	assert.Greater(suite.T(), result.DurationMs, 0)
+	assert.Nil(suite.T(), result.ErrorMessage)
+	assert.NotNil(suite.T(), result.ResponseBody)
+
+	// Verify the request was received by mock server
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(1, time.Second*2))
+	requests := suite.mockServer.GetRequests()
+	require.Len(suite.T(), requests, 1)
+
+	receivedReq := requests[0]
+	assert.Equal(suite.T(), "POST", receivedReq.Method)
+	assert.Equal(suite.T(), "/webhook", receivedReq.URL)
+	assert.Contains(suite.T(), receivedReq.Headers["Content-Type"], "application/json")
+	assert.Contains(suite.T(), receivedReq.Body, "test")
+	assert.Contains(suite.T(), receivedReq.Body, "data")
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_SuccessfulGET() {
+	// Setup mock server response
+	suite.mockServer.SetSuccessResponse("GET", "/api/status", map[string]interface{}{
+		"status": "healthy",
+		"uptime": "5m30s",
+		"version": "1.0.0",
+	})
+
+	// Create a GET task
+	task := suite.factory.CreateHTTPTask(
+		"GET",
+		suite.mockServer.GetURL()+"/api/status",
+		models.Headers{"User-Agent": "task-scheduler/1.0"},
+		nil, // No payload for GET
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.True(suite.T(), result.Success)
+	assert.Equal(suite.T(), 200, *result.StatusCode)
+	assert.Greater(suite.T(), result.DurationMs, 0)
+
+	// Verify the request was received
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(1, time.Second*2))
+	requests := suite.mockServer.GetRequests()
+	require.Len(suite.T(), requests, 1)
+
+	receivedReq := requests[0]
+	assert.Equal(suite.T(), "GET", receivedReq.Method)
+	assert.Equal(suite.T(), "/api/status", receivedReq.URL)
+	assert.Equal(suite.T(), "task-scheduler/1.0", receivedReq.Headers["User-Agent"])
+	assert.Empty(suite.T(), receivedReq.Body) // GET should have no body
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_HTTPError() {
+	// Setup mock server to return error
+	suite.mockServer.SetErrorResponse("POST", "/webhook", 500, "Internal server error")
+
+	// Create a task
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		suite.mockServer.GetURL()+"/webhook",
+		models.Headers{"Content-Type": "application/json"},
+		map[string]string{"test": "data"},
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.False(suite.T(), result.Success)
+	assert.NotNil(suite.T(), result.StatusCode)
+	assert.Equal(suite.T(), 500, *result.StatusCode)
+	assert.Greater(suite.T(), result.DurationMs, 0)
+	assert.NotNil(suite.T(), result.ResponseBody)
+	assert.Contains(suite.T(), *result.ResponseBody, "Internal server error")
+
+	// Verify the request was still received
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(1, time.Second*2))
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_NetworkError() {
+	// Create a task with invalid URL (server not running)
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		"http://localhost:99999/nonexistent",
+		models.Headers{"Content-Type": "application/json"},
+		map[string]string{"test": "data"},
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.False(suite.T(), result.Success)
+	assert.Nil(suite.T(), result.StatusCode) // No HTTP response received
+	assert.Greater(suite.T(), result.DurationMs, 0)
+	assert.NotNil(suite.T(), result.ErrorMessage)
+	assert.Contains(suite.T(), *result.ErrorMessage, "connection refused")
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_Timeout() {
+	// Setup mock server with delay longer than executor timeout
+	suite.mockServer.SetTimeoutResponse("POST", "/slow", time.Second*35)
+
+	// Create a task
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		suite.mockServer.GetURL()+"/slow",
+		models.Headers{"Content-Type": "application/json"},
+		map[string]string{"test": "data"},
+	)
+
+	// Execute the task
+	start := time.Now()
+	result := suite.executor.Execute(task)
+	duration := time.Since(start)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.False(suite.T(), result.Success)
+	assert.Nil(suite.T(), result.StatusCode) // Timeout before response
+	assert.NotNil(suite.T(), result.ErrorMessage)
+	assert.Contains(suite.T(), *result.ErrorMessage, "timeout")
+	
+	// Should timeout around 30 seconds (executor timeout)
+	assert.Greater(suite.T(), duration, time.Second*29)
+	assert.Less(suite.T(), duration, time.Second*35)
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_InvalidURL() {
+	// Create a task with malformed URL
+	task := &models.Task{
+		ID:          uuid.New(),
+		Name:        "Invalid URL Task",
+		TriggerType: models.TriggerTypeOneOff,
+		Method:      "GET",
+		URL:         "not-a-valid-url",
+		Headers:     models.Headers{},
+		Status:      models.TaskStatusScheduled,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.False(suite.T(), result.Success)
+	assert.Nil(suite.T(), result.StatusCode)
+	assert.Greater(suite.T(), result.DurationMs, 0)
+	assert.NotNil(suite.T(), result.ErrorMessage)
+	assert.Contains(suite.T(), *result.ErrorMessage, "Failed to prepare request")
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_CustomHeaders() {
+	// Setup mock server
+	suite.mockServer.SetSuccessResponse("POST", "/api", map[string]string{"status": "ok"})
+
+	// Create a task with custom headers
+	customHeaders := models.Headers{
+		"Authorization":    "Bearer token123",
+		"X-API-Key":        "secret-key",
+		"X-Request-ID":     "req-12345",
+		"Content-Type":     "application/json",
+		"Accept":           "application/json",
+	}
+
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		suite.mockServer.GetURL()+"/api",
+		customHeaders,
+		map[string]string{"data": "value"},
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.True(suite.T(), result.Success)
+
+	// Verify custom headers were sent
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(1, time.Second*2))
+	requests := suite.mockServer.GetRequests()
+	require.Len(suite.T(), requests, 1)
+
+	receivedReq := requests[0]
+	assert.Equal(suite.T(), "Bearer token123", receivedReq.Headers["Authorization"])
+	assert.Equal(suite.T(), "secret-key", receivedReq.Headers["X-Api-Key"]) // Headers may be canonicalized
+	assert.Equal(suite.T(), "req-12345", receivedReq.Headers["X-Request-Id"])
+	assert.Contains(suite.T(), receivedReq.Headers["Content-Type"], "application/json")
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_ResponseHeaders() {
+	// Setup mock server with custom response headers
+	suite.mockServer.SetResponse("GET", "/api", utils.MockResponse{
+		StatusCode: 200,
+		Headers: map[string]string{
+			"Content-Type":     "application/json",
+			"X-RateLimit":      "100",
+			"X-Response-Time":  "50ms",
+			"Cache-Control":    "no-cache",
+		},
+		Body: `{"status": "success"}`,
+	})
+
+	// Create a task
+	task := suite.factory.CreateHTTPTask(
+		"GET",
+		suite.mockServer.GetURL()+"/api",
+		models.Headers{},
+		nil,
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.True(suite.T(), result.Success)
+	assert.NotNil(suite.T(), result.ResponseHeaders)
+
+	// Verify response headers were captured
+	assert.Equal(suite.T(), "application/json", result.ResponseHeaders["Content-Type"])
+	assert.Equal(suite.T(), "100", result.ResponseHeaders["X-RateLimit"])
+	assert.Equal(suite.T(), "50ms", result.ResponseHeaders["X-Response-Time"])
+	assert.Equal(suite.T(), "no-cache", result.ResponseHeaders["Cache-Control"])
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_LargePayload() {
+	// Setup mock server
+	suite.mockServer.SetSuccessResponse("POST", "/upload", map[string]string{"status": "received"})
+
+	// Create a large payload
+	largeData := make(map[string]interface{})
+	for i := 0; i < 1000; i++ {
+		largeData[fmt.Sprintf("key_%d", i)] = fmt.Sprintf("value_%d_with_some_additional_data", i)
+	}
+
+	// Create a task with large payload
+	task := suite.factory.CreateHTTPTask(
+		"POST",
+		suite.mockServer.GetURL()+"/upload",
+		models.Headers{"Content-Type": "application/json"},
+		largeData,
+	)
+
+	// Execute the task
+	result := suite.executor.Execute(task)
+
+	// Verify result
+	require.NotNil(suite.T(), result)
+	assert.True(suite.T(), result.Success)
+	assert.Greater(suite.T(), result.DurationMs, 0)
+
+	// Verify the large payload was received
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(1, time.Second*5))
+	requests := suite.mockServer.GetRequests()
+	require.Len(suite.T(), requests, 1)
+
+	receivedReq := requests[0]
+	assert.Equal(suite.T(), "POST", receivedReq.Method)
+	assert.Greater(suite.T(), len(receivedReq.Body), 10000) // Should be a large body
+	assert.Contains(suite.T(), receivedReq.Body, "key_500")  // Spot check
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_DifferentMethods() {
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+
+	for _, method := range methods {
+		suite.Run(fmt.Sprintf("method_%s", method), func() {
+			// Setup mock server for each method
+			suite.mockServer.SetSuccessResponse(method, "/api", map[string]string{
+				"method": method,
+				"status": "ok",
+			})
+
+			// Create task for this method
+			var payload interface{}
+			if method != "GET" && method != "DELETE" {
+				payload = map[string]string{"test": "data"}
+			}
+
+			task := suite.factory.CreateHTTPTask(
+				method,
+				suite.mockServer.GetURL()+"/api",
+				models.Headers{"Content-Type": "application/json"},
+				payload,
+			)
+
+			// Execute the task
+			result := suite.executor.Execute(task)
+
+			// Verify result
+			require.NotNil(suite.T(), result)
+			assert.True(suite.T(), result.Success, "Method %s should succeed", method)
+
+			// Verify the request was received with correct method
+			time.Sleep(100 * time.Millisecond) // Give mock server time to process
+			requests := suite.mockServer.GetRequestsByMethod(method)
+			assert.GreaterOrEqual(suite.T(), len(requests), 1, "Should receive %s request", method)
+
+			if len(requests) > 0 {
+				assert.Equal(suite.T(), method, requests[len(requests)-1].Method)
+			}
+
+			// Clear requests for next iteration
+			suite.mockServer.ClearRequests()
+		})
+	}
+}
+
+func (suite *HTTPExecutorTestSuite) TestExecute_ConcurrentRequests() {
+	// Setup mock server
+	suite.mockServer.SetSuccessResponse("POST", "/concurrent", map[string]string{"status": "ok"})
+
+	const numRequests = 10
+	resultChan := make(chan *models.TaskResult, numRequests)
+
+	// Execute multiple tasks concurrently
+	for i := 0; i < numRequests; i++ {
+		go func(i int) {
+			task := suite.factory.CreateHTTPTask(
+				"POST",
+				suite.mockServer.GetURL()+"/concurrent",
+				models.Headers{"Content-Type": "application/json"},
+				map[string]interface{}{"request_id": i},
+			)
+
+			result := suite.executor.Execute(task)
+			resultChan <- result
+		}(i)
+	}
+
+	// Collect results
+	successCount := 0
+	for i := 0; i < numRequests; i++ {
+		result := <-resultChan
+		require.NotNil(suite.T(), result)
+		if result.Success {
+			successCount++
+		}
+	}
+
+	// All requests should succeed
+	assert.Equal(suite.T(), numRequests, successCount)
+
+	// Verify all requests were received
+	assert.True(suite.T(), suite.mockServer.WaitForRequests(numRequests, time.Second*5))
+	requests := suite.mockServer.GetRequests()
+	assert.Len(suite.T(), requests, numRequests)
+}
+
+func TestHTTPExecutorTestSuite(t *testing.T) {
+	suite.Run(t, new(HTTPExecutorTestSuite))
+}

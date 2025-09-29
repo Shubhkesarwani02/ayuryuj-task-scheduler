@@ -33,9 +33,13 @@ func Connect() {
 		port := getEnv("DB_PORT", "5432")
 
 		// Determine SSL mode based on environment
-		sslMode := "disable"
-		if host != "localhost" && host != "127.0.0.1" {
-			sslMode = "require"
+		sslMode := getEnv("DB_SSLMODE", "disable")
+		if sslMode == "" {
+			if host != "localhost" && host != "127.0.0.1" && host != "postgres" {
+				sslMode = "require"
+			} else {
+				sslMode = "disable"
+			}
 		}
 
 		dsn := fmt.Sprintf(
