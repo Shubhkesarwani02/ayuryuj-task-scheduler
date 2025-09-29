@@ -26,13 +26,21 @@ func Connect() {
 		})
 	} else {
 		// Fallback to constructing DSN from individual parameters
+		host := getEnv("PGHOST", getEnv("DB_HOST", "localhost"))
+		user := getEnv("PGUSER", getEnv("DB_USER", "postgres"))
+		password := getEnv("PGPASSWORD", getEnv("DB_PASSWORD", "postgres"))
+		dbname := getEnv("PGDATABASE", getEnv("DB_NAME", "task_scheduler"))
+		port := getEnv("DB_PORT", "5432")
+
+		// Determine SSL mode based on environment
+		sslMode := "disable"
+		if host != "localhost" && host != "127.0.0.1" {
+			sslMode = "require"
+		}
+
 		dsn := fmt.Sprintf(
-			"host=%s user=%s password=%s dbname=%s port=%s sslmode=require TimeZone=UTC",
-			getEnv("PGHOST", "localhost"),
-			getEnv("PGUSER", "postgres"),
-			getEnv("PGPASSWORD", "postgres"),
-			getEnv("PGDATABASE", "task_scheduler"),
-			getEnv("DB_PORT", "5432"),
+			"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
+			host, user, password, dbname, port, sslMode,
 		)
 
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{

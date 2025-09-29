@@ -2,6 +2,7 @@ package handlers
 
 import (
     "encoding/json"
+    "fmt"
     "net/http"
     "strconv"
     "time"
@@ -331,17 +332,17 @@ func (h *TaskHandler) GetTaskResults(c *gin.Context) {
 func (h *TaskHandler) validateTrigger(trigger *models.CreateTaskTrigger) error {
     if trigger.Type == models.TriggerTypeOneOff {
         if trigger.DateTime == nil {
-            return gin.Error{Err: gin.Error{Err: nil}, Type: gin.ErrorTypePublic, Meta: "datetime is required for one-off triggers"}
+            return fmt.Errorf("datetime is required for one-off triggers")
         }
         if trigger.DateTime.Before(time.Now()) {
-            return gin.Error{Err: gin.Error{Err: nil}, Type: gin.ErrorTypePublic, Meta: "datetime must be in the future"}
+            return fmt.Errorf("datetime must be in the future")
         }
     } else if trigger.Type == models.TriggerTypeCron {
         if trigger.Cron == nil || *trigger.Cron == "" {
-            return gin.Error{Err: gin.Error{Err: nil}, Type: gin.ErrorTypePublic, Meta: "cron expression is required for cron triggers"}
+            return fmt.Errorf("cron expression is required for cron triggers")
         }
         if _, err := cron.ParseStandard(*trigger.Cron); err != nil {
-            return gin.Error{Err: gin.Error{Err: nil}, Type: gin.ErrorTypePublic, Meta: "invalid cron expression"}
+            return fmt.Errorf("invalid cron expression: %v", err)
         }
     }
     return nil

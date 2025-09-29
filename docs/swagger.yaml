@@ -1,0 +1,407 @@
+basePath: /api/v1
+definitions:
+  models.CreateTaskAction:
+    properties:
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      method:
+        type: string
+      payload: {}
+      url:
+        type: string
+    required:
+    - method
+    - url
+    type: object
+  models.CreateTaskRequest:
+    properties:
+      action:
+        $ref: '#/definitions/models.CreateTaskAction'
+      name:
+        type: string
+      trigger:
+        $ref: '#/definitions/models.CreateTaskTrigger'
+    required:
+    - action
+    - name
+    - trigger
+    type: object
+  models.CreateTaskTrigger:
+    properties:
+      cron:
+        type: string
+      datetime:
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/models.TriggerType'
+        enum:
+        - one-off
+        - cron
+    required:
+    - type
+    type: object
+  models.Headers:
+    additionalProperties:
+      type: string
+    type: object
+  models.Task:
+    properties:
+      created_at:
+        type: string
+      cron_expr:
+        type: string
+      headers:
+        $ref: '#/definitions/models.Headers'
+      id:
+        type: string
+      method:
+        type: string
+      name:
+        type: string
+      next_run:
+        type: string
+      payload:
+        type: string
+      status:
+        $ref: '#/definitions/models.TaskStatus'
+      trigger_time:
+        type: string
+      trigger_type:
+        $ref: '#/definitions/models.TriggerType'
+      updated_at:
+        type: string
+      url:
+        type: string
+    type: object
+  models.TaskStatus:
+    enum:
+    - scheduled
+    - cancelled
+    - completed
+    type: string
+    x-enum-varnames:
+    - TaskStatusScheduled
+    - TaskStatusCancelled
+    - TaskStatusCompleted
+  models.TriggerType:
+    enum:
+    - one-off
+    - cron
+    type: string
+    x-enum-varnames:
+    - TriggerTypeOneOff
+    - TriggerTypeCron
+  models.UpdateTaskRequest:
+    properties:
+      action:
+        $ref: '#/definitions/models.CreateTaskAction'
+      name:
+        type: string
+      trigger:
+        $ref: '#/definitions/models.CreateTaskTrigger'
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: A RESTful Task Scheduler Service for managing HTTP tasks
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Task Scheduler API
+  version: "1.0"
+paths:
+  /metrics:
+    get:
+      description: Get execution metrics and statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get system metrics
+      tags:
+      - metrics
+  /results:
+    get:
+      description: Get paginated list of all task execution results with optional
+        filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by task ID
+        in: query
+        name: task_id
+        type: string
+      - description: Filter by success status
+        in: query
+        name: success
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get all task execution results
+      tags:
+      - results
+  /tasks:
+    get:
+      description: Get a paginated list of tasks with optional status filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by status
+        enum:
+        - scheduled
+        - cancelled
+        - completed
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all tasks
+      tags:
+      - tasks
+    post:
+      consumes:
+      - application/json
+      description: Create a new scheduled task with trigger and action configuration
+      parameters:
+      - description: Task creation request
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new task
+      tags:
+      - tasks
+  /tasks/{id}:
+    delete:
+      description: Cancel a task (marks as cancelled, doesn't delete)
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Cancel a task
+      tags:
+      - tasks
+    get:
+      description: Get detailed information about a specific task
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get task by ID
+      tags:
+      - tasks
+    put:
+      consumes:
+      - application/json
+      description: Update an existing task's configuration
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task update request
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a task
+      tags:
+      - tasks
+  /tasks/{id}/results:
+    get:
+      description: Get paginated list of execution results for a specific task
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get task execution results
+      tags:
+      - tasks
+swagger: "2.0"

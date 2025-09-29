@@ -11,6 +11,7 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	_ "task-scheduler/docs"
 	"task-scheduler/internal/database"
 	"task-scheduler/internal/executor"
 	"task-scheduler/internal/handlers"
@@ -50,7 +51,12 @@ func main() {
 	resultRepo := repository.NewResultRepository(database.DB)
 
 	// Initialize logging and metrics
-	taskLogger, err := logger.NewTaskLogger("/var/log/task-scheduler/tasks.log")
+	logPath := "./logs/tasks.log"
+	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
+		logPath = logDir + "/tasks.log"
+	}
+
+	taskLogger, err := logger.NewTaskLogger(logPath)
 	if err != nil {
 		log.Printf("Failed to initialize task logger: %v", err)
 		// Create a no-op logger or handle gracefully
