@@ -1,30 +1,30 @@
 package handlers
 
 import (
-    "encoding/json"
-    "fmt"
-    "net/http"
-    "strconv"
-    "time"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
 
-    "github.com/gin-gonic/gin"
-    "github.com/google/uuid"
-    "github.com/robfig/cron/v3"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 
-    "task-scheduler/internal/models"
-    "task-scheduler/internal/repository"
+	"task-scheduler/internal/models"
+	"task-scheduler/internal/repository"
 )
 
 type TaskHandler struct {
-    taskRepo   *repository.TaskRepository
-    resultRepo *repository.ResultRepository
+	taskRepo   *repository.TaskRepository
+	resultRepo *repository.ResultRepository
 }
 
 func NewTaskHandler(taskRepo *repository.TaskRepository, resultRepo *repository.ResultRepository) *TaskHandler {
-    return &TaskHandler{
-        taskRepo:   taskRepo,
-        resultRepo: resultRepo,
-    }
+	return &TaskHandler{
+		taskRepo:   taskRepo,
+		resultRepo: resultRepo,
+	}
 }
 
 // CreateTask godoc
@@ -39,54 +39,54 @@ func NewTaskHandler(taskRepo *repository.TaskRepository, resultRepo *repository.
 // @Failure 500 {object} map[string]string
 // @Router /tasks [post]
 func (h *TaskHandler) CreateTask(c *gin.Context) {
-    var req models.CreateTaskRequest
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	var req models.CreateTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    // Validate trigger configuration
-    if err := h.validateTrigger(&req.Trigger); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	// Validate trigger configuration
+	if err := h.validateTrigger(&req.Trigger); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    task := &models.Task{
-        Name:        req.Name,
-        TriggerType: req.Trigger.Type,
-        Method:      req.Action.Method,
-        URL:         req.Action.URL,
-        Headers:     req.Action.Headers,
-        Status:      models.TaskStatusScheduled,
-        CreatedAt:   time.Now(),
-        UpdatedAt:   time.Now(),
-    }
+	task := &models.Task{
+		Name:        req.Name,
+		TriggerType: req.Trigger.Type,
+		Method:      req.Action.Method,
+		URL:         req.Action.URL,
+		Headers:     req.Action.Headers,
+		Status:      models.TaskStatusScheduled,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
 
-    // Set trigger-specific fields
-    if req.Trigger.Type == models.TriggerTypeOneOff {
-        task.TriggerTime = req.Trigger.DateTime
-        task.NextRun = req.Trigger.DateTime
-    } else {
-        task.CronExpr = req.Trigger.Cron
-        // Calculate next run time for cron
-        if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
-            task.NextRun = &nextRun
-        }
-    }
+	// Set trigger-specific fields
+	if req.Trigger.Type == models.TriggerTypeOneOff {
+		task.TriggerTime = req.Trigger.DateTime
+		task.NextRun = req.Trigger.DateTime
+	} else {
+		task.CronExpr = req.Trigger.Cron
+		// Calculate next run time for cron
+		if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
+			task.NextRun = &nextRun
+		}
+	}
 
-    // Handle payload
-    if req.Action.Payload != nil {
-        payloadBytes, _ := json.Marshal(req.Action.Payload)
-        payloadStr := string(payloadBytes)
-        task.Payload = &payloadStr
-    }
+	// Handle payload
+	if req.Action.Payload != nil {
+		payloadBytes, _ := json.Marshal(req.Action.Payload)
+		payloadStr := string(payloadBytes)
+		task.Payload = &payloadStr
+	}
 
-    if err := h.taskRepo.Create(task); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
-        return
-    }
+	if err := h.taskRepo.Create(task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		return
+	}
 
-    c.JSON(http.StatusCreated, task)
+	c.JSON(http.StatusCreated, task)
 }
 
 // GetTasks godoc
@@ -101,34 +101,34 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks [get]
 func (h *TaskHandler) GetTasks(c *gin.Context) {
-    page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-    status := c.Query("status")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	status := c.Query("status")
 
-    if page < 1 {
-        page = 1
-    }
-    if limit < 1 || limit > 100 {
-        limit = 10
-    }
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
 
-    offset := (page - 1) * limit
+	offset := (page - 1) * limit
 
-    tasks, total, err := h.taskRepo.List(limit, offset, status)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
-        return
-    }
+	tasks, total, err := h.taskRepo.List(limit, offset, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tasks"})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{
-        "tasks": tasks,
-        "pagination": gin.H{
-            "page":       page,
-            "limit":      limit,
-            "total":      total,
-            "total_pages": (total + int64(limit) - 1) / int64(limit),
-        },
-    })
+	c.JSON(http.StatusOK, gin.H{
+		"tasks": tasks,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total":       total,
+			"total_pages": (total + int64(limit) - 1) / int64(limit),
+		},
+	})
 }
 
 // GetTask godoc
@@ -142,20 +142,20 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 // @Failure 404 {object} map[string]string
 // @Router /tasks/{id} [get]
 func (h *TaskHandler) GetTask(c *gin.Context) {
-    idStr := c.Param("id")
-    id, err := uuid.Parse(idStr)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-        return
-    }
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 
-    task, err := h.taskRepo.GetByID(id)
-    if err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-        return
-    }
+	task, err := h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
 
-    c.JSON(http.StatusOK, task)
+	c.JSON(http.StatusOK, task)
 }
 
 // UpdateTask godoc
@@ -172,70 +172,70 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks/{id} [put]
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
-    idStr := c.Param("id")
-    id, err := uuid.Parse(idStr)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-        return
-    }
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 
-    task, err := h.taskRepo.GetByID(id)
-    if err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-        return
-    }
+	task, err := h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
 
-    var req models.UpdateTaskRequest
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	var req models.UpdateTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    // Update fields if provided
-    if req.Name != nil {
-        task.Name = *req.Name
-    }
+	// Update fields if provided
+	if req.Name != nil {
+		task.Name = *req.Name
+	}
 
-    if req.Trigger != nil {
-        if err := h.validateTrigger(req.Trigger); err != nil {
-            c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-            return
-        }
+	if req.Trigger != nil {
+		if err := h.validateTrigger(req.Trigger); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-        task.TriggerType = req.Trigger.Type
-        if req.Trigger.Type == models.TriggerTypeOneOff {
-            task.TriggerTime = req.Trigger.DateTime
-            task.CronExpr = nil
-            task.NextRun = req.Trigger.DateTime
-        } else {
-            task.CronExpr = req.Trigger.Cron
-            task.TriggerTime = nil
-            if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
-                task.NextRun = &nextRun
-            }
-        }
-    }
+		task.TriggerType = req.Trigger.Type
+		if req.Trigger.Type == models.TriggerTypeOneOff {
+			task.TriggerTime = req.Trigger.DateTime
+			task.CronExpr = nil
+			task.NextRun = req.Trigger.DateTime
+		} else {
+			task.CronExpr = req.Trigger.Cron
+			task.TriggerTime = nil
+			if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
+				task.NextRun = &nextRun
+			}
+		}
+	}
 
-    if req.Action != nil {
-        task.Method = req.Action.Method
-        task.URL = req.Action.URL
-        task.Headers = req.Action.Headers
+	if req.Action != nil {
+		task.Method = req.Action.Method
+		task.URL = req.Action.URL
+		task.Headers = req.Action.Headers
 
-        if req.Action.Payload != nil {
-            payloadBytes, _ := json.Marshal(req.Action.Payload)
-            payloadStr := string(payloadBytes)
-            task.Payload = &payloadStr
-        } else {
-            task.Payload = nil
-        }
-    }
+		if req.Action.Payload != nil {
+			payloadBytes, _ := json.Marshal(req.Action.Payload)
+			payloadStr := string(payloadBytes)
+			task.Payload = &payloadStr
+		} else {
+			task.Payload = nil
+		}
+	}
 
-    if err := h.taskRepo.Update(task); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
-        return
-    }
+	if err := h.taskRepo.Update(task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+		return
+	}
 
-    c.JSON(http.StatusOK, task)
+	c.JSON(http.StatusOK, task)
 }
 
 // DeleteTask godoc
@@ -250,26 +250,26 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks/{id} [delete]
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
-    idStr := c.Param("id")
-    id, err := uuid.Parse(idStr)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-        return
-    }
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 
-    // Check if task exists
-    _, err = h.taskRepo.GetByID(id)
-    if err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-        return
-    }
+	// Check if task exists
+	_, err = h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
 
-    if err := h.taskRepo.Delete(id); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel task"})
-        return
-    }
+	if err := h.taskRepo.Delete(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel task"})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{"message": "Task cancelled successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Task cancelled successfully"})
 }
 
 // GetTaskResults godoc
@@ -286,73 +286,73 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /tasks/{id}/results [get]
 func (h *TaskHandler) GetTaskResults(c *gin.Context) {
-    idStr := c.Param("id")
-    id, err := uuid.Parse(idStr)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
-        return
-    }
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 
-    // Check if task exists
-    _, err = h.taskRepo.GetByID(id)
-    if err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-        return
-    }
+	// Check if task exists
+	_, err = h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
 
-    page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-    if page < 1 {
-        page = 1
-    }
-    if limit < 1 || limit > 100 {
-        limit = 10
-    }
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
 
-    offset := (page - 1) * limit
+	offset := (page - 1) * limit
 
-    results, total, err := h.resultRepo.GetByTaskID(id, limit, offset)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch results"})
-        return
-    }
+	results, total, err := h.resultRepo.GetByTaskID(id, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch results"})
+		return
+	}
 
-    c.JSON(http.StatusOK, gin.H{
-        "results": results,
-        "pagination": gin.H{
-            "page":       page,
-            "limit":      limit,
-            "total":      total,
-            "total_pages": (total + int64(limit) - 1) / int64(limit),
-        },
-    })
+	c.JSON(http.StatusOK, gin.H{
+		"results": results,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total":       total,
+			"total_pages": (total + int64(limit) - 1) / int64(limit),
+		},
+	})
 }
 
 func (h *TaskHandler) validateTrigger(trigger *models.CreateTaskTrigger) error {
-    if trigger.Type == models.TriggerTypeOneOff {
-        if trigger.DateTime == nil {
-            return fmt.Errorf("datetime is required for one-off triggers")
-        }
-        if trigger.DateTime.Before(time.Now()) {
-            return fmt.Errorf("datetime must be in the future")
-        }
-    } else if trigger.Type == models.TriggerTypeCron {
-        if trigger.Cron == nil || *trigger.Cron == "" {
-            return fmt.Errorf("cron expression is required for cron triggers")
-        }
-        if _, err := cron.ParseStandard(*trigger.Cron); err != nil {
-            return fmt.Errorf("invalid cron expression: %v", err)
-        }
-    }
-    return nil
+	if trigger.Type == models.TriggerTypeOneOff {
+		if trigger.DateTime == nil {
+			return fmt.Errorf("datetime is required for one-off triggers")
+		}
+		if trigger.DateTime.Before(time.Now()) {
+			return fmt.Errorf("datetime must be in the future")
+		}
+	} else if trigger.Type == models.TriggerTypeCron {
+		if trigger.Cron == nil || *trigger.Cron == "" {
+			return fmt.Errorf("cron expression is required for cron triggers")
+		}
+		if _, err := cron.ParseStandard(*trigger.Cron); err != nil {
+			return fmt.Errorf("invalid cron expression: %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *TaskHandler) calculateNextCronRun(cronExpr string) (time.Time, error) {
-    parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-    schedule, err := parser.Parse(cronExpr)
-    if err != nil {
-        return time.Time{}, err
-    }
-    return schedule.Next(time.Now()), nil
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	schedule, err := parser.Parse(cronExpr)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return schedule.Next(time.Now()), nil
 }
