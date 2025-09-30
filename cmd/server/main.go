@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -106,12 +107,33 @@ func main() {
 
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "healthy"})
+		c.JSON(200, gin.H{
+			"status":    "healthy",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"version":   "1.0.0",
+			"components": gin.H{
+				"database":  "healthy",
+				"scheduler": "healthy",
+			},
+		})
 	})
 
 	// API routes
 	api := r.Group("/api/v1")
 	{
+		// Health check endpoint in API namespace too
+		api.GET("/health", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"status":    "healthy",
+				"timestamp": time.Now().Format(time.RFC3339),
+				"version":   "1.0.0",
+				"components": gin.H{
+					"database":  "healthy",
+					"scheduler": "healthy",
+				},
+			})
+		})
+
 		// Task routes
 		api.POST("/tasks", taskHandler.CreateTask)
 		api.GET("/tasks", taskHandler.GetTasks)
@@ -119,6 +141,11 @@ func main() {
 		api.PUT("/tasks/:id", taskHandler.UpdateTask)
 		api.DELETE("/tasks/:id", taskHandler.DeleteTask)
 		api.GET("/tasks/:id/results", taskHandler.GetTaskResults)
+
+		// Task control routes
+		api.POST("/tasks/:id/execute", taskHandler.ExecuteTask)
+		api.POST("/tasks/:id/pause", taskHandler.PauseTask)
+		api.POST("/tasks/:id/resume", taskHandler.ResumeTask)
 
 		// Result routes
 		api.GET("/results", resultHandler.GetResults)

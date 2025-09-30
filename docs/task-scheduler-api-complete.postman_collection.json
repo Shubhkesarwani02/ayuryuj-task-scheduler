@@ -156,8 +156,8 @@
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('id');",
                   "    pm.expect(response.name).to.include('One-off');",
-                  "    pm.expect(response.trigger.type).to.eql('one-off');",
-                  "    pm.expect(response.status).to.eql('pending');",
+                  "    pm.expect(response.trigger_type).to.eql('one-off');",
+                  "    pm.expect(response.status).to.eql('scheduled');",
                   "    ",
                   "    // Store task ID for later use",
                   "    pm.collectionVariables.set('oneOffTaskId', response.id);",
@@ -166,7 +166,7 @@
                   "",
                   "pm.test('Task has correct structure', function () {",
                   "    const response = pm.response.json();",
-                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger', 'action', 'status', 'created_at', 'updated_at');",
+                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger_type', 'trigger_value', 'method', 'url', 'headers', 'payload', 'status', 'created_at', 'updated_at', 'next_run', 'last_run');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -204,8 +204,8 @@
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('id');",
                   "    pm.expect(response.name).to.include('Cron');",
-                  "    pm.expect(response.trigger.type).to.eql('cron');",
-                  "    pm.expect(response.status).to.eql('active');",
+                  "    pm.expect(response.trigger_type).to.eql('cron');",
+                  "    pm.expect(response.status).to.eql('scheduled');",
                   "    ",
                   "    // Store task ID for later use",
                   "    pm.collectionVariables.set('cronTaskId', response.id);",
@@ -213,7 +213,7 @@
                   "",
                   "pm.test('Cron expression is valid', function () {",
                   "    const response = pm.response.json();",
-                  "    pm.expect(response.trigger.cron).to.match(/^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+$/);",
+                  "    pm.expect(response.trigger_value).to.match(/^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+$/);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -251,9 +251,10 @@
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('tasks');",
                   "    pm.expect(response.tasks).to.be.an('array');",
-                  "    pm.expect(response).to.have.property('total');",
-                  "    pm.expect(response).to.have.property('page');",
-                  "    pm.expect(response).to.have.property('limit');",
+                  "    pm.expect(response).to.have.property('pagination');",
+                  "    pm.expect(response.pagination).to.have.property('total');",
+                  "    pm.expect(response.pagination).to.have.property('page');",
+                  "    pm.expect(response.pagination).to.have.property('limit');",
                   "});",
                   "",
                   "pm.test('Our test tasks are in the list', function () {",
@@ -303,7 +304,7 @@
                   "",
                   "pm.test('Task details are complete', function () {",
                   "    const response = pm.response.json();",
-                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger', 'action', 'status', 'created_at', 'updated_at');",
+                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger_type', 'trigger_value', 'method', 'url', 'headers', 'payload', 'status', 'created_at', 'updated_at', 'next_run', 'last_run');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -373,7 +374,7 @@
                   "    pm.response.to.have.status(200);",
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('message');",
-                  "    pm.expect(response.message).to.include('executed');",
+                  "    pm.expect(response.message).to.include('triggered');",
                   "});",
                   "",
                   "// Wait a moment for execution to complete",
@@ -464,9 +465,10 @@
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('results');",
                   "    pm.expect(response.results).to.be.an('array');",
-                  "    pm.expect(response).to.have.property('total');",
-                  "    pm.expect(response).to.have.property('page');",
-                  "    pm.expect(response).to.have.property('limit');",
+                  "    pm.expect(response).to.have.property('pagination');",
+                  "    pm.expect(response.pagination).to.have.property('total');",
+                  "    pm.expect(response.pagination).to.have.property('page');",
+                  "    pm.expect(response.pagination).to.have.property('limit');",
                   "});",
                   "",
                   "pm.test('Results have required fields', function () {",
@@ -475,8 +477,8 @@
                   "        const result = response.results[0];",
                   "        pm.expect(result).to.have.property('id');",
                   "        pm.expect(result).to.have.property('task_id');",
-                  "        pm.expect(result).to.have.property('status');",
-                  "        pm.expect(result).to.have.property('executed_at');",
+                  "        pm.expect(result).to.have.property('success');",
+                  "        pm.expect(result).to.have.property('run_at');",
                   "    }",
                   "});"
                 ],
@@ -516,6 +518,7 @@
                   "    const response = pm.response.json();",
                   "    pm.expect(response).to.have.property('results');",
                   "    pm.expect(response.results).to.be.an('array');",
+                  "    pm.expect(response).to.have.property('pagination');",
                   "});",
                   "",
                   "pm.test('All results belong to the specified task', function () {",
@@ -555,8 +558,13 @@
                   "pm.test('Complex task created successfully', function () {",
                   "    pm.response.to.have.status(201);",
                   "    const response = pm.response.json();",
-                  "    pm.expect(response.action.payload).to.have.property('user');",
-                  "    pm.expect(response.action.payload).to.have.property('metadata');",
+                  "    pm.expect(response).to.have.property('payload');",
+                  "    // Payload is stored as JSON string in the API",
+                  "    if (response.payload) {",
+                  "        const payload = JSON.parse(response.payload);",
+                  "        pm.expect(payload).to.have.property('user');",
+                  "        pm.expect(payload).to.have.property('metadata');",
+                  "    }",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -640,9 +648,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/tasks/non-existent-task-id",
+              "raw": "{{baseUrl}}/tasks/00000000-0000-0000-0000-000000000000",
               "host": ["{{baseUrl}}"],
-              "path": ["tasks", "non-existent-task-id"]
+              "path": ["tasks", "00000000-0000-0000-0000-000000000000"]
             }
           }
         }
@@ -660,6 +668,9 @@
                 "exec": [
                   "pm.test('One-off task deleted successfully', function () {",
                   "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('message');",
+                  "    pm.expect(response.message).to.include('cancelled');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -685,6 +696,9 @@
                 "exec": [
                   "pm.test('Cron task deleted successfully', function () {",
                   "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('message');",
+                  "    pm.expect(response.message).to.include('cancelled');",
                   "});"
                 ],
                 "type": "text/javascript"

@@ -19,8 +19,11 @@ type TaskStatus string
 
 const (
 	TaskStatusScheduled TaskStatus = "scheduled"
+	TaskStatusActive    TaskStatus = "active"
+	TaskStatusPaused    TaskStatus = "paused"
 	TaskStatusCancelled TaskStatus = "cancelled"
 	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusPending   TaskStatus = "pending"
 )
 
 type Headers map[string]string
@@ -44,19 +47,19 @@ func (h *Headers) Scan(value interface{}) error {
 }
 
 type Task struct {
-	ID          uuid.UUID   `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	Name        string      `json:"name" gorm:"not null"`
-	TriggerType TriggerType `json:"trigger_type" gorm:"not null"`
-	TriggerTime *time.Time  `json:"trigger_time,omitempty"`
-	CronExpr    *string     `json:"cron_expr,omitempty"`
-	Method      string      `json:"method" gorm:"not null"`
-	URL         string      `json:"url" gorm:"not null"`
-	Headers     Headers     `json:"headers,omitempty" gorm:"type:jsonb"`
-	Payload     *string     `json:"payload,omitempty" gorm:"type:jsonb"`
-	Status      TaskStatus  `json:"status" gorm:"default:scheduled"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	NextRun     *time.Time  `json:"next_run,omitempty"`
+	ID           uuid.UUID   `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	Name         string      `json:"name" gorm:"not null"`
+	TriggerType  TriggerType `json:"trigger_type" gorm:"not null"`
+	TriggerValue string      `json:"trigger_value" gorm:"not null"`
+	Method       string      `json:"method" gorm:"not null;default:GET"`
+	URL          string      `json:"url" gorm:"not null"`
+	Headers      Headers     `json:"headers,omitempty" gorm:"type:jsonb;default:'{}'"`
+	Payload      *string     `json:"payload,omitempty" gorm:"type:jsonb"`
+	Status       TaskStatus  `json:"status" gorm:"default:scheduled"`
+	CreatedAt    time.Time   `json:"created_at" gorm:"default:now()"`
+	UpdatedAt    time.Time   `json:"updated_at" gorm:"default:now()"`
+	NextRun      *time.Time  `json:"next_run,omitempty"`
+	LastRun      *time.Time  `json:"last_run,omitempty"`
 }
 
 type TaskResult struct {
@@ -86,6 +89,21 @@ type CreateTaskTrigger struct {
 	Type     TriggerType `json:"type" binding:"required,oneof=one-off cron"`
 	DateTime *time.Time  `json:"datetime,omitempty"`
 	Cron     *string     `json:"cron,omitempty"`
+}
+
+// GetTriggerValue returns the appropriate trigger value based on the trigger type
+func (t *CreateTaskTrigger) GetTriggerValue() string {
+	switch t.Type {
+	case TriggerTypeOneOff:
+		if t.DateTime != nil {
+			return t.DateTime.Format(time.RFC3339)
+		}
+	case TriggerTypeCron:
+		if t.Cron != nil {
+			return *t.Cron
+		}
+	}
+	return ""
 }
 
 type CreateTaskAction struct {

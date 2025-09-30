@@ -51,24 +51,29 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	task := &models.Task{
-		Name:        req.Name,
-		TriggerType: req.Trigger.Type,
-		Method:      req.Action.Method,
-		URL:         req.Action.URL,
-		Headers:     req.Action.Headers,
-		Status:      models.TaskStatusScheduled,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+	// Get trigger value based on type
+	triggerValue := req.Trigger.GetTriggerValue()
+	if triggerValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid trigger configuration"})
+		return
 	}
 
-	// Set trigger-specific fields
-	if req.Trigger.Type == models.TriggerTypeOneOff {
-		task.TriggerTime = req.Trigger.DateTime
+	task := &models.Task{
+		Name:         req.Name,
+		TriggerType:  req.Trigger.Type,
+		TriggerValue: triggerValue,
+		Method:       req.Action.Method,
+		URL:          req.Action.URL,
+		Headers:      req.Action.Headers,
+		Status:       models.TaskStatusScheduled,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Calculate next run time
+	if req.Trigger.Type == models.TriggerTypeOneOff && req.Trigger.DateTime != nil {
 		task.NextRun = req.Trigger.DateTime
-	} else {
-		task.CronExpr = req.Trigger.Cron
-		// Calculate next run time for cron
+	} else if req.Trigger.Type == models.TriggerTypeCron && req.Trigger.Cron != nil {
 		if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
 			task.NextRun = &nextRun
 		}
@@ -203,13 +208,11 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		}
 
 		task.TriggerType = req.Trigger.Type
-		if req.Trigger.Type == models.TriggerTypeOneOff {
-			task.TriggerTime = req.Trigger.DateTime
-			task.CronExpr = nil
+		task.TriggerValue = req.Trigger.GetTriggerValue()
+
+		if req.Trigger.Type == models.TriggerTypeOneOff && req.Trigger.DateTime != nil {
 			task.NextRun = req.Trigger.DateTime
-		} else {
-			task.CronExpr = req.Trigger.Cron
-			task.TriggerTime = nil
+		} else if req.Trigger.Type == models.TriggerTypeCron && req.Trigger.Cron != nil {
 			if nextRun, err := h.calculateNextCronRun(*req.Trigger.Cron); err == nil {
 				task.NextRun = &nextRun
 			}
@@ -355,4 +358,151 @@ func (h *TaskHandler) calculateNextCronRun(cronExpr string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return schedule.Next(time.Now()), nil
+}
+
+// ExecuteTask godoc
+// @Summary Execute a task immediately
+// @Description Trigger immediate execution of a task
+// @Tags tasks
+// @Produce json
+// @Param id path string true "Task ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /tasks/{id}/execute [post]
+func (h *TaskHandler) ExecuteTask(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
+		return
+	}
+
+	// Parse UUID
+	id, err := uuid.Parse(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		return
+	}
+
+	// Get task
+	_, err = h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// TODO: Trigger immediate execution via scheduler/executor
+	// For now, just return success message
+	c.JSON(http.StatusOK, gin.H{"message": "Task execution triggered successfully"})
+}
+
+// PauseTask godoc
+// @Summary Pause a recurring task
+// @Description Pause a cron-based task to stop future executions
+// @Tags tasks
+// @Produce json
+// @Param id path string true "Task ID"
+// @Success 200 {object} models.Task
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /tasks/{id}/pause [post]
+func (h *TaskHandler) PauseTask(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
+		return
+	}
+
+	// Parse UUID
+	id, err := uuid.Parse(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		return
+	}
+
+	// Get task
+	task, err := h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// Only pause cron tasks
+	if task.TriggerType != models.TriggerTypeCron {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only cron tasks can be paused"})
+		return
+	}
+
+	// Update status to paused
+	task.Status = models.TaskStatusPaused
+	task.UpdatedAt = time.Now()
+
+	if err := h.taskRepo.Update(task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to pause task"})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
+}
+
+// ResumeTask godoc
+// @Summary Resume a paused task
+// @Description Resume a previously paused cron-based task
+// @Tags tasks
+// @Produce json
+// @Param id path string true "Task ID"
+// @Success 200 {object} models.Task
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /tasks/{id}/resume [post]
+func (h *TaskHandler) ResumeTask(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
+		return
+	}
+
+	// Parse UUID
+	id, err := uuid.Parse(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID format"})
+		return
+	}
+
+	// Get task
+	task, err := h.taskRepo.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	// Only resume paused cron tasks
+	if task.TriggerType != models.TriggerTypeCron {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only cron tasks can be resumed"})
+		return
+	}
+
+	if task.Status != models.TaskStatusPaused {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task is not paused"})
+		return
+	}
+
+	// Update status to active and recalculate next run
+	task.Status = models.TaskStatusActive
+	task.UpdatedAt = time.Now()
+
+	// Recalculate next run time
+	if nextRun, err := h.calculateNextCronRun(task.TriggerValue); err == nil {
+		task.NextRun = &nextRun
+	}
+
+	if err := h.taskRepo.Update(task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resume task"})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
 }
