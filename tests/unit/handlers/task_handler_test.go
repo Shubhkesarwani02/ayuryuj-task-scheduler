@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -87,8 +88,9 @@ func TestCreateTaskHandlerLogic(t *testing.T) {
 				},
 			},
 			setupMock: func(m *MockTaskService) {
+				taskID := uuid.New()
 				task := &models.Task{
-					ID:          "task-123",
+					ID:          taskID,
 					Name:        "Test Task",
 					TriggerType: models.TriggerTypeOneOff,
 					Method:      "POST",
@@ -150,21 +152,21 @@ func TestGetTaskHandlerLogic(t *testing.T) {
 	}{
 		{
 			name:   "existing task",
-			taskID: "task-123",
+			taskID: "123e4567-e89b-12d3-a456-426614174000",
 			setupMock: func(m *MockTaskService) {
 				task := &models.Task{
-					ID:          "task-123",
+					ID:          uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
 					Name:        "Test Task",
 					TriggerType: models.TriggerTypeOneOff,
 					Method:      "GET",
 					URL:         "https://example.com/api",
 					Status:      models.TaskStatusCompleted,
 				}
-				m.On("GetTask", "task-123").Return(task, nil)
+				m.On("GetTask", "123e4567-e89b-12d3-a456-426614174000").Return(task, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body map[string]interface{}) {
-				assert.Equal(t, "task-123", body["id"])
+				assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", body["id"])
 				assert.Equal(t, "Test Task", body["name"])
 				assert.Equal(t, string(models.TaskStatusCompleted), body["status"])
 			},
@@ -220,12 +222,12 @@ func TestListTasksHandlerLogic(t *testing.T) {
 			setupMock: func(m *MockTaskService) {
 				tasks := []models.Task{
 					{
-						ID:     "task-1",
+						ID:     uuid.MustParse("123e4567-e89b-12d3-a456-426614174001"),
 						Name:   "Task 1",
 						Status: models.TaskStatusScheduled,
 					},
 					{
-						ID:     "task-2",
+						ID:     uuid.MustParse("123e4567-e89b-12d3-a456-426614174002"),
 						Name:   "Task 2",
 						Status: models.TaskStatusCompleted,
 					},
@@ -291,21 +293,21 @@ func TestUpdateTaskHandlerLogic(t *testing.T) {
 	}{
 		{
 			name:   "successful update",
-			taskID: "task-123",
+			taskID: "123e4567-e89b-12d3-a456-426614174000",
 			updates: map[string]interface{}{
 				"name": "Updated Task Name",
 			},
 			setupMock: func(m *MockTaskService) {
 				updatedTask := &models.Task{
-					ID:     "task-123",
+					ID:     uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
 					Name:   "Updated Task Name",
 					Status: models.TaskStatusScheduled,
 				}
-				m.On("UpdateTask", "task-123", mock.AnythingOfType("map[string]interface {}")).Return(updatedTask, nil)
+				m.On("UpdateTask", "123e4567-e89b-12d3-a456-426614174000", mock.AnythingOfType("map[string]interface {}")).Return(updatedTask, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, body map[string]interface{}) {
-				assert.Equal(t, "task-123", body["id"])
+				assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", body["id"])
 				assert.Equal(t, "Updated Task Name", body["name"])
 			},
 		},

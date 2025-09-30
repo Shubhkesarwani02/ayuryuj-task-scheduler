@@ -42,7 +42,7 @@ func TestTaskResult(t *testing.T) {
 		StatusCode:   &statusCode,
 		DurationMs:   150,
 		ResponseBody: stringPtr(`{"status": "ok"}`),
-		ExecutedAt:   time.Now(),
+		RunAt:        time.Now(),
 	}
 
 	assert.NotEqual(t, uuid.Nil, result.ID)
@@ -75,9 +75,7 @@ func TestCronValidation(t *testing.T) {
 func TestTaskStatuses(t *testing.T) {
 	statuses := []models.TaskStatus{
 		models.TaskStatusScheduled,
-		models.TaskStatusRunning,
 		models.TaskStatusCompleted,
-		models.TaskStatusFailed,
 		models.TaskStatusCancelled,
 	}
 
@@ -88,7 +86,7 @@ func TestTaskStatuses(t *testing.T) {
 
 	// Test status transitions
 	assert.NotEqual(t, models.TaskStatusScheduled, models.TaskStatusCompleted)
-	assert.NotEqual(t, models.TaskStatusRunning, models.TaskStatusFailed)
+	assert.NotEqual(t, models.TaskStatusCompleted, models.TaskStatusCancelled)
 }
 
 // Helper function

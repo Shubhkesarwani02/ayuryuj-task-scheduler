@@ -78,7 +78,7 @@ func TestTaskResult(t *testing.T) {
 		StatusCode:   &statusCode,
 		ResponseBody: &responseBody,
 		DurationMs:   234,
-		ExecutedAt:   time.Now(),
+		RunAt:        time.Now(),
 	}
 
 	assert.NotEqual(t, uuid.Nil, result.ID)
@@ -93,9 +93,7 @@ func TestTaskResult(t *testing.T) {
 func TestTaskStatusTransitions(t *testing.T) {
 	validStatuses := []models.TaskStatus{
 		models.TaskStatusScheduled,
-		models.TaskStatusRunning,
 		models.TaskStatusCompleted,
-		models.TaskStatusFailed,
 		models.TaskStatusCancelled,
 	}
 

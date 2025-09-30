@@ -178,7 +178,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateTaskRequest"
+                            "$ref": "#/definitions/task-scheduler_internal_models.CreateTaskRequest"
                         }
                     }
                 ],
@@ -186,7 +186,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/task-scheduler_internal_models.Task"
                         }
                     },
                     "400": {
@@ -233,7 +233,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/task-scheduler_internal_models.Task"
                         }
                     },
                     "400": {
@@ -282,7 +282,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateTaskRequest"
+                            "$ref": "#/definitions/task-scheduler_internal_models.UpdateTaskRequest"
                         }
                     }
                 ],
@@ -290,7 +290,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Task"
+                            "$ref": "#/definitions/task-scheduler_internal_models.Task"
                         }
                     },
                     "400": {
@@ -453,7 +453,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "models.CreateTaskAction": {
+        "task-scheduler_internal_models.CreateTaskAction": {
             "type": "object",
             "required": [
                 "method",
@@ -475,7 +475,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateTaskRequest": {
+        "task-scheduler_internal_models.CreateTaskRequest": {
             "type": "object",
             "required": [
                 "action",
@@ -484,17 +484,17 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/models.CreateTaskAction"
+                    "$ref": "#/definitions/task-scheduler_internal_models.CreateTaskAction"
                 },
                 "name": {
                     "type": "string"
                 },
                 "trigger": {
-                    "$ref": "#/definitions/models.CreateTaskTrigger"
+                    "$ref": "#/definitions/task-scheduler_internal_models.CreateTaskTrigger"
                 }
             }
         },
-        "models.CreateTaskTrigger": {
+        "task-scheduler_internal_models.CreateTaskTrigger": {
             "type": "object",
             "required": [
                 "type"
@@ -513,19 +513,19 @@ const docTemplate = `{
                     ],
                     "allOf": [
                         {
-                            "$ref": "#/definitions/models.TriggerType"
+                            "$ref": "#/definitions/task-scheduler_internal_models.TriggerType"
                         }
                     ]
                 }
             }
         },
-        "models.Headers": {
+        "task-scheduler_internal_models.Headers": {
             "type": "object",
             "additionalProperties": {
                 "type": "string"
             }
         },
-        "models.Task": {
+        "task-scheduler_internal_models.Task": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -535,7 +535,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "headers": {
-                    "$ref": "#/definitions/models.Headers"
+                    "$ref": "#/definitions/task-scheduler_internal_models.Headers"
                 },
                 "id": {
                     "type": "string"
@@ -553,13 +553,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "$ref": "#/definitions/models.TaskStatus"
+                    "$ref": "#/definitions/task-scheduler_internal_models.TaskStatus"
                 },
                 "trigger_time": {
                     "type": "string"
                 },
                 "trigger_type": {
-                    "$ref": "#/definitions/models.TriggerType"
+                    "$ref": "#/definitions/task-scheduler_internal_models.TriggerType"
                 },
                 "updated_at": {
                     "type": "string"
@@ -569,7 +569,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.TaskStatus": {
+        "task-scheduler_internal_models.TaskStatus": {
             "type": "string",
             "enum": [
                 "scheduled",
@@ -582,7 +582,7 @@ const docTemplate = `{
                 "TaskStatusCompleted"
             ]
         },
-        "models.TriggerType": {
+        "task-scheduler_internal_models.TriggerType": {
             "type": "string",
             "enum": [
                 "one-off",
@@ -593,17 +593,17 @@ const docTemplate = `{
                 "TriggerTypeCron"
             ]
         },
-        "models.UpdateTaskRequest": {
+        "task-scheduler_internal_models.UpdateTaskRequest": {
             "type": "object",
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/models.CreateTaskAction"
+                    "$ref": "#/definitions/task-scheduler_internal_models.CreateTaskAction"
                 },
                 "name": {
                     "type": "string"
                 },
                 "trigger": {
-                    "$ref": "#/definitions/models.CreateTaskTrigger"
+                    "$ref": "#/definitions/task-scheduler_internal_models.CreateTaskTrigger"
                 }
             }
         }
