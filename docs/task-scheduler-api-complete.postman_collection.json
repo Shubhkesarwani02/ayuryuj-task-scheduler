@@ -1,0 +1,707 @@
+{
+  "info": {
+    "_postman_id": "task-scheduler-api-2025",
+    "name": "Task Scheduler API - Complete Test Suite",
+    "description": "Comprehensive test collection for the Task Scheduler API with full CRUD operations, automated tests, and production-ready scenarios",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global variables for all requests",
+          "pm.globals.set('timestamp', new Date().toISOString());",
+          "pm.globals.set('randomId', Math.random().toString(36).substring(7));",
+          "pm.globals.set('testRunId', 'test_' + Date.now());",
+          "",
+          "// Helper functions",
+          "pm.globals.set('generateCronExpression', function() {",
+          "    const minute = Math.floor(Math.random() * 60);",
+          "    const hour = Math.floor(Math.random() * 24);",
+          "    return `${minute} ${hour} * * *`;",
+          "});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test validations",
+          "pm.test('Response time is acceptable', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has proper headers', function () {",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{protocol}}://{{host}}/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "taskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cronTaskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "oneOffTaskId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔍 System Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health check passes', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('healthy');",
+                  "    pm.expect(response).to.have.property('timestamp');",
+                  "    pm.expect(response).to.have.property('version');",
+                  "});",
+                  "",
+                  "pm.test('Database connection is healthy', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.components.database).to.eql('healthy');",
+                  "});",
+                  "",
+                  "pm.test('Scheduler is running', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.components.scheduler).to.eql('healthy');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "API Metrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Metrics endpoint accessible', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('tasks');",
+                  "    pm.expect(response).to.have.property('executions');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["metrics"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Task Management - CRUD Operations",
+      "item": [
+        {
+          "name": "Create One-off Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('One-off task created successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response.name).to.include('One-off');",
+                  "    pm.expect(response.trigger.type).to.eql('one-off');",
+                  "    pm.expect(response.status).to.eql('pending');",
+                  "    ",
+                  "    // Store task ID for later use",
+                  "    pm.collectionVariables.set('oneOffTaskId', response.id);",
+                  "    pm.collectionVariables.set('taskId', response.id);",
+                  "});",
+                  "",
+                  "pm.test('Task has correct structure', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger', 'action', 'status', 'created_at', 'updated_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"One-off Task - {{testRunId}}\",\n  \"trigger\": {\n    \"type\": \"one-off\",\n    \"datetime\": \"2025-12-31T23:59:59Z\"\n  },\n  \"action\": {\n    \"method\": \"GET\",\n    \"url\": \"https://httpbin.org/get\",\n    \"headers\": {\n      \"User-Agent\": \"TaskScheduler/2.0\",\n      \"X-Test-Run\": \"{{testRunId}}\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Create Cron Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cron task created successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response.name).to.include('Cron');",
+                  "    pm.expect(response.trigger.type).to.eql('cron');",
+                  "    pm.expect(response.status).to.eql('active');",
+                  "    ",
+                  "    // Store task ID for later use",
+                  "    pm.collectionVariables.set('cronTaskId', response.id);",
+                  "});",
+                  "",
+                  "pm.test('Cron expression is valid', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.trigger.cron).to.match(/^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+$/);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cron Task - Daily Health Check - {{testRunId}}\",\n  \"trigger\": {\n    \"type\": \"cron\",\n    \"cron\": \"0 9 * * *\"\n  },\n  \"action\": {\n    \"method\": \"POST\",\n    \"url\": \"https://httpbin.org/post\",\n    \"headers\": {\n      \"Content-Type\": \"application/json\",\n      \"X-Test-Run\": \"{{testRunId}}\"\n    },\n    \"payload\": {\n      \"message\": \"Daily health check\",\n      \"timestamp\": \"{{timestamp}}\",\n      \"testRun\": \"{{testRunId}}\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Get All Tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tasks retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('tasks');",
+                  "    pm.expect(response.tasks).to.be.an('array');",
+                  "    pm.expect(response).to.have.property('total');",
+                  "    pm.expect(response).to.have.property('page');",
+                  "    pm.expect(response).to.have.property('limit');",
+                  "});",
+                  "",
+                  "pm.test('Our test tasks are in the list', function () {",
+                  "    const response = pm.response.json();",
+                  "    const testRunId = pm.globals.get('testRunId');",
+                  "    const testTasks = response.tasks.filter(task => task.name.includes(testRunId));",
+                  "    pm.expect(testTasks.length).to.be.at.least(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Specific Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Specific task retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response.id).to.eql(pm.collectionVariables.get('taskId'));",
+                  "});",
+                  "",
+                  "pm.test('Task details are complete', function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.all.keys('id', 'name', 'trigger', 'action', 'status', 'created_at', 'updated_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Task updated successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.name).to.include('UPDATED');",
+                  "    pm.expect(response.updated_at).to.not.eql(response.created_at);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"UPDATED - One-off Task - {{testRunId}}\",\n  \"trigger\": {\n    \"type\": \"one-off\",\n    \"datetime\": \"2025-12-31T23:58:00Z\"\n  },\n  \"action\": {\n    \"method\": \"GET\",\n    \"url\": \"https://httpbin.org/get\",\n    \"headers\": {\n      \"User-Agent\": \"TaskScheduler/2.0-Updated\",\n      \"X-Test-Run\": \"{{testRunId}}\",\n      \"X-Updated\": \"true\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{taskId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "⚡ Task Execution & Control",
+      "item": [
+        {
+          "name": "Execute Task Immediately",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Task execution triggered successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('message');",
+                  "    pm.expect(response.message).to.include('executed');",
+                  "});",
+                  "",
+                  "// Wait a moment for execution to complete",
+                  "setTimeout(function(){}, 2000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{taskId}}", "execute"]
+            }
+          }
+        },
+        {
+          "name": "Pause Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Task paused successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('paused');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{cronTaskId}}/pause",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{cronTaskId}}", "pause"]
+            }
+          }
+        },
+        {
+          "name": "Resume Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Task resumed successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('active');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{cronTaskId}}/resume",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{cronTaskId}}", "resume"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Results & History",
+      "item": [
+        {
+          "name": "Get All Results",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Results retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('results');",
+                  "    pm.expect(response.results).to.be.an('array');",
+                  "    pm.expect(response).to.have.property('total');",
+                  "    pm.expect(response).to.have.property('page');",
+                  "    pm.expect(response).to.have.property('limit');",
+                  "});",
+                  "",
+                  "pm.test('Results have required fields', function () {",
+                  "    const response = pm.response.json();",
+                  "    if (response.results.length > 0) {",
+                  "        const result = response.results[0];",
+                  "        pm.expect(result).to.have.property('id');",
+                  "        pm.expect(result).to.have.property('task_id');",
+                  "        pm.expect(result).to.have.property('status');",
+                  "        pm.expect(result).to.have.property('executed_at');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/results?limit=20&page=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["results"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Task-Specific Results",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Task results retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('results');",
+                  "    pm.expect(response.results).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('All results belong to the specified task', function () {",
+                  "    const response = pm.response.json();",
+                  "    const taskId = pm.collectionVariables.get('taskId');",
+                  "    response.results.forEach(result => {",
+                  "        pm.expect(result.task_id).to.eql(taskId);",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/results",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{taskId}}", "results"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧪 Advanced Test Scenarios",
+      "item": [
+        {
+          "name": "Create Task with Complex Payload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Complex task created successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.action.payload).to.have.property('user');",
+                  "    pm.expect(response.action.payload).to.have.property('metadata');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Complex Payload Task - {{testRunId}}\",\n  \"trigger\": {\n    \"type\": \"one-off\",\n    \"datetime\": \"2025-12-31T23:59:59Z\"\n  },\n  \"action\": {\n    \"method\": \"POST\",\n    \"url\": \"https://httpbin.org/post\",\n    \"headers\": {\n      \"Content-Type\": \"application/json\",\n      \"Authorization\": \"Bearer fake-token\",\n      \"X-API-Version\": \"v2\"\n    },\n    \"payload\": {\n      \"user\": {\n        \"id\": \"{{randomId}}\",\n        \"name\": \"Test User\",\n        \"email\": \"test@example.com\"\n      },\n      \"metadata\": {\n        \"timestamp\": \"{{timestamp}}\",\n        \"source\": \"task-scheduler\",\n        \"version\": \"2.0\",\n        \"environment\": \"test\"\n      },\n      \"data\": [\n        {\"key\": \"value1\", \"priority\": 1},\n        {\"key\": \"value2\", \"priority\": 2}\n      ]\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Test Invalid Cron Expression",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Invalid cron expression rejected', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('error');",
+                  "    pm.expect(response.error).to.include('cron');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Invalid Cron Task\",\n  \"trigger\": {\n    \"type\": \"cron\",\n    \"cron\": \"invalid-cron-expression\"\n  },\n  \"action\": {\n    \"method\": \"GET\",\n    \"url\": \"https://httpbin.org/get\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Test Non-existent Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Non-existent task returns 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/non-existent-task-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "non-existent-task-id"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧹 Cleanup Test Data",
+      "item": [
+        {
+          "name": "Delete One-off Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('One-off task deleted successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{oneOffTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{oneOffTaskId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Cron Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cron task deleted successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{cronTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tasks", "{{cronTaskId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

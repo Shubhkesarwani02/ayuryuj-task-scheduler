@@ -25,3 +25,26 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Go build artifacts
+*.exe
+*.test
+/bin/
+/dist/
+
+# Logs
+*.log
+/logs/
+
+# Test coverage
+*.out
+coverage.txt
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
